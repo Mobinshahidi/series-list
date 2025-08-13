@@ -1,159 +1,169 @@
 <!DOCTYPE html>
-   <html lang="en">
-   <head>
-       <meta charset="UTF-8">
-       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-       <title>Series List</title>
-       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-       <style>
-           .card-img-top { max-height: 300px; object-fit: cover; }
-           .card { min-height: 100%; }
-           .card-body { display: flex; flex-direction: column; }
-           .card-text { flex-grow: 1; }
-           #loading { display: none; text-align: center; }
-       </style>
-   </head>
-   <body>
-       <div class="container mt-4">
-           <div class="row mb-4">
-               <div class="col-md-8">
-                   <input type="text" id="search" class="form-control" placeholder="Search by name">
-               </div>
-               <div class="col-md-4">
-                   <button id="export" class="btn btn-primary" disabled>Export to CSV</button>
-               </div>
-           </div>
-           <div id="loading" class="my-4">
-               <div class="spinner-border text-primary" role="status">
-                   <span class="visually-hidden">Loading...</span>
-               </div>
-               <p>Loading series data...</p>
-           </div>
-           <div id="list" class="row"></div>
-       </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Series List</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card-img-top { max-height: 300px; object-fit: cover; }
+        .card { min-height: 100%; }
+        .card-body { display: flex; flex-direction: column; }
+        .card-text { flex-grow: 1; }
+        #loading { display: none; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <input type="text" id="search" class="form-control" placeholder="Search by name">
+            </div>
+            <div class="col-md-4">
+                <button id="export" class="btn btn-primary" disabled>Export to CSV</button>
+            </div>
+        </div>
+        <div id="loading" class="my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading series data...</p>
+        </div>
+        <div id="list" class="row"></div>
+    </div>
 
-       <script>
-           let allData = [];
+    <script>
+        let allData = [];
+        let seriesList = [];
 
-           // Read series.txt
-           async function loadSeriesList() {
-               try {
-                   const resp = await fetch('/series.txt');
-                   if (!resp.ok) throw new Error('Failed to load series.txt');
-                   const text = await resp.text();
-                   const seriesList = text.split('\n').map(line => {
-                       const [name, year] = line.trim().split(' — ');
-                       return name && year ? { name, year } : null;
-                   }).filter(Boolean);
-                   return seriesList;
-               } catch (e) {
-                   console.error('Error loading series.txt:', e);
-                   return [];
-               }
-           }
+        // Read series.txt
+        async function loadSeriesList() {
+            try {
+                const resp = await fetch('/series.txt');
+                if (!resp.ok) throw new Error('Failed to load series.txt');
+                const text = await resp.text();
+                return text.split('\n').map(line => {
+                    const [name, year] = line.trim().split(' — ');
+                    return name && year ? { name, year } : null;
+                }).filter(Boolean);
+            } catch (e) {
+                console.error('Error loading series.txt:', e);
+                return [];
+            }
+        }
 
-           // Fetch TMDB data
-           async function fetchSeriesData() {
-               document.getElementById('loading').style.display = 'block';
-               const apiKey = process.env.TMDB_API_KEY; // Set in Netlify
-               const baseUrl = 'https://api.themoviedb.org/3';
-               const imageBase = 'https://image.tmdb.org/t/p/w500';
-               const seriesList = await loadSeriesList();
+        // Fetch TMDB data in batches
+        async function fetchSeriesData() {
+            document.getElementById('loading').style.display = 'block';
+            const apiKey = 'your_tmdb_api_key_here'; // Replace with your TMDB API key for local testing
+            const baseUrl = 'https://api.themoviedb.org/3';
+            const imageBase = 'https://image.tmdb.org/t/p/w500';
+            seriesList = await loadSeriesList();
 
-               for (const series of seriesList) {
-                   let entry = {
-                       name: series.name,
-                       year: series.year,
-                       image: '',
-                       overview: 'Not found on TMDB',
-                       genres: []
-                   };
-                   try {
-                       // Search with name and year for accuracy
-                       const searchUrl = `${baseUrl}/search/tv?api_key=${apiKey}&language=en-US&query=${encodeURIComponent(series.name)}&first_air_date_year=${series.year}&include_adult=false`;
-                       const resp = await fetch(searchUrl);
-                       if (!resp.ok) throw new Error('Search failed');
-                       const results = (await resp.json()).results;
-                       if (results.length > 0) {
-                           // Prioritize exact name match (case-insensitive)
-                           const exactMatches = results.filter(r => r.name.toLowerCase() === series.name.toLowerCase());
-                           let show;
-                           if (exactMatches.length > 0) {
-                               show = exactMatches.sort((a, b) => b.popularity - a.popularity)[0];
-                           } else {
-                               // Fall back to most popular
-                               show = results.sort((a, b) => b.popularity - a.popularity)[0];
-                           }
-                           // Get details
-                           const detailsUrl = `${baseUrl}/tv/${show.id}?api_key=${apiKey}&language=en-US`;
-                           const detResp = await fetch(detailsUrl);
-                           if (!detResp.ok) throw new Error('Details failed');
-                           const det = await detResp.json();
-                           entry = {
-                               name: det.name,
-                               year: det.first_air_date ? det.first_air_date.slice(0, 4) : series.year,
-                               image: det.poster_path ? imageBase + det.poster_path : '',
-                               overview: det.overview || 'No overview available',
-                               genres: det.genres.map(g => g.name)
-                           };
-                       }
-                   } catch (e) {
-                       console.error(`Error fetching ${series.name}:`, e);
-                       // Keep placeholder entry
-                   }
-                   allData.push(entry);
-               }
-               render(allData);
-               document.getElementById('loading').style.display = 'none';
-               document.getElementById('export').disabled = false;
-           }
+            let index = 0;
+            const batchSize = 20;
 
-           // Render function
-           function render(items) {
-               const list = document.getElementById('list');
-               list.innerHTML = '';
-               items.forEach(item => {
-                   const col = document.createElement('div');
-                   col.className = 'col-md-4 col-sm-6 mb-4';
-                   col.innerHTML = `
-                       <div class="card h-100">
-                           ${item.image ? `<img src="${item.image}" class="card-img-top" alt="${item.name}">` : '<div class="card-img-top bg-secondary" style="height: 300px;"></div>'}
-                           <div class="card-body">
-                               <h5 class="card-title">${item.name} (${item.year})</h5>
-                               <p class="card-text">${item.overview}</p>
-                               <p class="card-text"><small class="text-muted">Genres: ${item.genres.join(', ') || 'N/A'}</small></p>
-                           </div>
-                       </div>
-                   `;
-                   list.appendChild(col);
-               });
-           }
+            function processBatch() {
+                const batch = seriesList.slice(index, index + batchSize);
+                if (batch.length === 0) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('export').disabled = false;
+                    render(allData);
+                    return;
+                }
 
-           // Search/filter
-           document.getElementById('search').addEventListener('input', e => {
-               const term = e.target.value.toLowerCase();
-               const filtered = allData.filter(item => item.name.toLowerCase().includes(term));
-               render(filtered);
-           });
+                batch.forEach(async series => {
+                    let entry = {
+                        name: series.name,
+                        year: series.year,
+                        image: '',
+                        overview: 'Not found on TMDB',
+                        genres: []
+                    };
+                    try {
+                        const searchUrl = `${baseUrl}/search/tv?api_key=${apiKey}&language=en-US&query=${encodeURIComponent(series.name)}&first_air_date_year=${series.year}&include_adult=false`;
+                        const resp = await fetch(searchUrl);
+                        if (!resp.ok) throw new Error('Search failed');
+                        const results = (await resp.json()).results;
+                        if (results.length > 0) {
+                            const exactMatches = results.filter(r => r.name.toLowerCase() === series.name.toLowerCase());
+                            let show;
+                            if (exactMatches.length > 0) {
+                                show = exactMatches.sort((a, b) => b.popularity - a.popularity)[0];
+                            } else {
+                                show = results.sort((a, b) => b.popularity - a.popularity)[0];
+                            }
+                            const detailsUrl = `${baseUrl}/tv/${show.id}?api_key=${apiKey}&language=en-US`;
+                            const detResp = await fetch(detailsUrl);
+                            if (!detResp.ok) throw new Error('Details failed');
+                            const det = await detResp.json();
+                            entry = {
+                                name: det.name,
+                                year: det.first_air_date ? det.first_air_date.slice(0, 4) : series.year,
+                                image: det.poster_path ? imageBase + det.poster_path : '',
+                                overview: det.overview || 'No overview available',
+                                genres: det.genres.map(g => g.name)
+                            };
+                        }
+                    } catch (e) {
+                        console.error(`Error fetching ${series.name}:`, e);
+                    }
+                    allData.push(entry);
+                });
 
-           // Export to CSV
-           document.getElementById('export').addEventListener('click', () => {
-               const csvContent = 'Name,Year,Overview,Genres\n' +
-                   allData.map(item => {
-                       return `"${item.name.replace(/"/g, '""')}",${item.year},"${item.overview.replace(/"/g, '""')}",${item.genres.join('|')}`;
-                   }).join('\n');
-               const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-               const url = URL.createObjectURL(blob);
-               const link = document.createElement('a');
-               link.href = url;
-               link.download = 'series.csv';
-               link.click();
-               URL.revokeObjectURL(url);
-           });
+                index += batchSize;
+                setTimeout(processBatch, 1000); // Wait 1 second (1000ms) before next batch
+            }
 
-           // Load data on page load
-           fetchSeriesData();
-       </script>
-       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-   </body>
-   </html>
+            processBatch();
+        }
+
+        // Render function
+        function render(items) {
+            const list = document.getElementById('list');
+            list.innerHTML = '';
+            items.forEach(item => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4 col-sm-6 mb-4';
+                col.innerHTML = `
+                    <div class="card h-100">
+                        ${item.image ? `<img src="${item.image}" class="card-img-top" alt="${item.name}">` : '<div class="card-img-top bg-secondary" style="height: 300px;"></div>'}
+                        <div class="card-body">
+                            <h5 class="card-title">${item.name} (${item.year})</h5>
+                            <p class="card-text">${item.overview}</p>
+                            <p class="card-text"><small class="text-muted">Genres: ${item.genres.join(', ') || 'N/A'}</small></p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(col);
+            });
+        }
+
+        // Search/filter
+        document.getElementById('search').addEventListener('input', e => {
+            const term = e.target.value.toLowerCase();
+            const filtered = allData.filter(item => item.name.toLowerCase().includes(term));
+            render(filtered);
+        });
+
+        // Export to CSV
+        document.getElementById('export').addEventListener('click', () => {
+            const csvContent = 'Name,Year,Overview,Genres\n' +
+                allData.map(item => {
+                    return `"${item.name.replace(/"/g, '""')}",${item.year},"${item.overview.replace(/"/g, '""')}",${item.genres.join('|')}`;
+                }).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'series.csv';
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Load data on page load
+        fetchSeriesData();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
