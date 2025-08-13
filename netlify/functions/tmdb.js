@@ -1,19 +1,15 @@
 // Netlify function: tv search proxy with accuracy checks
 // File path: netlify/functions/tmdb.js
 
-import fetch from "node-fetch";
-import dotenv from "dotenv";
-dotenv.config();
-
+// No need for node-fetch — Netlify’s Node 18 runtime has fetch built‑in
 const TMDB_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
-/** Normalize titles for strict matching */
 function normTitle(s) {
   return s
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[\.\'\u2019]/g, "") // remove dots/apostrophes
+    .replace(/[\.\'\u2019]/g, "")
     .replace(/&/g, "and")
     .replace(/:|—|–|-/g, " ")
     .replace(/[^a-z0-9 ]+/g, " ")
@@ -21,29 +17,24 @@ function normTitle(s) {
     .trim();
 }
 
-/** Pick best match: exact normalized title & year, else closest by popularity with same year */
 function pickBest(inputTitle, inputYear, results = []) {
   const nInput = normTitle(inputTitle);
   const yearStr = String(inputYear);
   const withYear = (r) => (r.first_air_date || "").startsWith(yearStr);
 
-  // First pass: exact normalized title match + year
   let exactYear = results.filter(
     (r) => normTitle(r.name) === nInput && withYear(r),
   );
   if (exactYear.length) return exactYear[0];
 
-  // Second pass: exact title regardless of year
   let exactAny = results.filter((r) => normTitle(r.name) === nInput);
   if (exactAny.length) return exactAny[0];
 
-  // Third pass: same year, highest popularity
   let sameYear = results
     .filter(withYear)
     .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
   if (sameYear.length) return sameYear[0];
 
-  // Fallback: top result
   return results[0];
 }
 
@@ -61,7 +52,6 @@ export async function handler(event) {
     if (!q)
       return { statusCode: 400, body: JSON.stringify({ error: "Missing q" }) };
 
-    // 1) Search by title (and year hint)
     const searchUrl = new URL(`${TMDB_BASE}/search/tv`);
     searchUrl.searchParams.set("api_key", TMDB_KEY);
     searchUrl.searchParams.set("query", q);
@@ -87,16 +77,13 @@ export async function handler(event) {
 
     const best = pickBest(q, year, results);
 
-    // 2) Fetch full TV details for richer fields
-    const tvId = best.id;
-    const detailUrl = new URL(`${TMDB_BASE}/tv/${tvId}`);
+    const detailUrl = new URL(`${TMDB_BASE}/tv/${best.id}`);
     detailUrl.searchParams.set("api_key", TMDB_KEY);
 
     const dRes = await fetch(detailUrl);
     if (!dRes.ok) throw new Error(`TMDB details failed: ${dRes.status}`);
     const d = await dRes.json();
 
-    // Compose payload
     const payload = {
       id: d.id,
       name: d.name,
