@@ -28,7 +28,8 @@
 
   <template id="cardTpl">
     <article class="rounded-2xl overflow-hidden shadow-sm border bg-white flex flex-col">
-      <div class="aspect-[2/3] bg-slate-200 grid place-items-center text-slate-500 text-sm">No image</div>
+      <!-- Selector fix: use a data attribute instead of escaping special characters -->
+      <div data-img class="aspect-[2/3] bg-slate-200 grid place-items-center text-slate-500 text-sm">Loading…</div>
       <div class="p-4 flex-1 flex flex-col">
         <h2 class="font-semibold text-lg leading-snug"></h2>
         <p class="text-sm text-slate-600 mt-1"></p>
@@ -42,7 +43,6 @@
   const API_URL = "/.netlify/functions/tmdb"; // Proxied function
   const IMG_BASE = "https://image.tmdb.org/t/p/w342";
 
-  /** Parse series.txt lines: "Title — YYYY" */
   async function readSeriesList() {
     const res = await fetch("./series.txt", { cache: "no-store" });
     if (!res.ok) throw new Error("Failed to load series.txt");
@@ -58,12 +58,8 @@
       .filter(Boolean);
   }
 
-  /** Debounce helper */
-  const debounce = (fn, ms=250) => {
-    let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-  };
+  const debounce = (fn, ms=250) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
 
-  /** Fetch TMDB data via function with title+year, then details */
   async function fetchShow(title, year) {
     const url = new URL(API_URL, location.origin);
     url.searchParams.set("q", title);
@@ -73,72 +69,79 @@
     return res.json();
   }
 
-  /** Render cards */
-  function render(items) {
+  // Create & mount a card immediately, return an updater for when data arrives
+  function mountCard({title, year}) {
     const grid = document.getElementById("grid");
-    grid.innerHTML = "";
     const tpl = document.getElementById("cardTpl");
+    const node = tpl.content.cloneNode(true);
 
-    items.forEach(item => {
-      const node = tpl.content.cloneNode(true);
-      const imgWrap = node.querySelector(".aspect-\\[2/3\\]");
-      const h2 = node.querySelector("h2");
-      const p = node.querySelector("p");
-      const meta = node.querySelector("div.mt-3");
-      const link = node.querySelector("a");
+    const imgWrap = node.querySelector('[data-img]');
+    const h2 = node.querySelector("h2");
+    const p = node.querySelector("p");
+    const meta = node.querySelector("div.mt-3");
+    const link = node.querySelector("a");
 
-      h2.textContent = `${item.inputTitle} — ${item.inputYear}`;
-      p.textContent = item.overview || "";
-      link.href = item.tmdbUrl || "#";
+    h2.textContent = `${title} — ${year}`;
+    p.textContent = "Fetching…";
+    link.removeAttribute('href');
 
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(node);
+    const cardEl = wrapper.firstElementChild;
+    grid.appendChild(cardEl);
+
+    return function update(data) {
+      p.textContent = data.overview || "";
       meta.innerHTML = [
-        item.name && item.name !== item.inputTitle ? `<span class=\"opacity-80\">TMDB: ${item.name}</span>` : "",
-        item.first_air_date ? `<span>First air: ${item.first_air_date}</span>` : "",
-        item.vote_average ? `<span>Rating: ${item.vote_average.toFixed(1)}</span>` : "",
-        item.networks?.length ? `<span>Networks: ${item.networks.join(', ')}</span>` : "",
-        item.status ? `<span>Status: ${item.status}</span>` : "",
+        data.name && data.name !== title ? `<span class=\"opacity-80\">TMDB: ${data.name}</span>` : "",
+        data.first_air_date ? `<span>First air: ${data.first_air_date}</span>` : "",
+        data.vote_average ? `<span>Rating: ${Number(data.vote_average).toFixed(1)}</span>` : "",
+        data.networks?.length ? `<span>Networks: ${data.networks.join(', ')}</span>` : "",
+        data.status ? `<span>Status: ${data.status}</span>` : "",
       ].filter(Boolean).join(" · ");
 
-      if (item.poster_path) {
+      const imgWrap = cardEl.querySelector('[data-img]');
+      if (data.poster_path) {
         const img = document.createElement("img");
         img.loading = "lazy";
-        img.src = IMG_BASE + item.poster_path;
-        img.alt = item.name || item.inputTitle;
+        img.src = IMG_BASE + data.poster_path;
+        img.alt = data.name || title;
         img.className = "w-full h-auto block";
         imgWrap.innerHTML = "";
         imgWrap.appendChild(img);
+      } else {
+        imgWrap.textContent = "No image";
       }
 
-      grid.appendChild(node);
-    });
+      if (data.tmdbUrl) { link.href = data.tmdbUrl; }
+    }
   }
 
-  /** In-memory dataset for search & export */
+  // In-memory dataset for export
   let DATA = [];
 
   function applyFilters() {
     const q = document.getElementById('searchInput').value.trim().toLowerCase();
     const y = document.getElementById('yearFilter').value;
-    const filtered = DATA.filter(it => {
-      const matchQ = !q || (
-        it.inputTitle.toLowerCase().includes(q) ||
-        (it.name||'').toLowerCase().includes(q) ||
-        (it.overview||'').toLowerCase().includes(q)
-      );
-      const matchY = !y || String(it.inputYear) === y;
-      return matchQ && matchY;
+    const cards = Array.from(document.getElementById('grid').children);
+
+    cards.forEach(card => {
+      const title = card.querySelector('h2').textContent.toLowerCase();
+      const yearMatch = /\b(\d{4})$/.exec(card.querySelector('h2').textContent);
+      const year = yearMatch ? yearMatch[1] : '';
+      const desc = (card.querySelector('p').textContent || '').toLowerCase();
+      const matchQ = !q || title.includes(q) || desc.includes(q);
+      const matchY = !y || year === y;
+      card.style.display = (matchQ && matchY) ? '' : 'none';
     });
-    render(filtered);
-    document.getElementById('status').textContent = `${filtered.length} of ${DATA.length} shown`;
+
+    document.getElementById('status').textContent = `${cards.filter(c=>c.style.display!=='none').length} of ${cards.length} shown`;
   }
 
   function populateYearFilter(list) {
     const years = Array.from(new Set(list.map(x=>x.year))).sort((a,b)=>a-b);
     const sel = document.getElementById('yearFilter');
-    years.forEach(y => {
-      const o = document.createElement('option');
-      o.value = String(y); o.textContent = y; sel.appendChild(o);
-    });
+    years.forEach(y => { const o=document.createElement('option'); o.value=String(y); o.textContent=y; sel.appendChild(o); });
   }
 
   function exportCsv() {
@@ -148,11 +151,7 @@
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'series.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'series.csv'; a.click(); URL.revokeObjectURL(a.href);
   }
 
   function exportJson() {
@@ -160,38 +159,53 @@
       inputTitle,inputYear,id,name,first_air_date,vote_average,status,networks,tmdbUrl,poster_path
     }));
     const blob = new Blob([JSON.stringify(subset, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'series.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'series.json'; a.click(); URL.revokeObjectURL(a.href);
   }
 
-  // Wire UI
   document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 150));
   document.getElementById('yearFilter').addEventListener('change', applyFilters);
   document.getElementById('exportCsv').addEventListener('click', exportCsv);
   document.getElementById('exportJson').addEventListener('click', exportJson);
 
-  // Boot
+  // Small concurrency pool so results appear continuously
+  async function pool(tasks, limit=4) {
+    let i = 0, running = 0; const results = [];
+    return new Promise(resolve => {
+      const next = () => {
+        if (i === tasks.length && running === 0) return resolve(results);
+        while (running < limit && i < tasks.length) {
+          const idx = i++;
+          running++;
+          tasks[idx]().then(r => results[idx]=r).catch(()=>{}).finally(()=>{ running--; next(); });
+        }
+      };
+      next();
+    });
+  }
+
   (async function init(){
     try {
       const list = await readSeriesList();
       populateYearFilter(list);
       document.getElementById('status').textContent = `Loaded ${list.length} items. Looking up on TMDB…`;
 
-      // Fetch sequentially to be gentle on rate limits
-      const out = [];
-      for (const {title, year} of list) {
-        try {
-          const data = await fetchShow(title, year);
-          out.push({ inputTitle: title, inputYear: year, ...data });
-          document.getElementById('status').textContent = `Fetched ${out.length}/${list.length}: ${title}`;
-        } catch (e) {
-          out.push({ inputTitle: title, inputYear: year, error: String(e) });
-        }
-      }
-      DATA = out;
+      const tasks = list.map(({title, year}) => {
+        const update = mountCard({title, year});
+        return async () => {
+          try {
+            const data = await fetchShow(title, year);
+            const row = { inputTitle: title, inputYear: year, ...data };
+            DATA.push(row);
+            update(data);
+            applyFilters();
+            document.getElementById('status').textContent = `${DATA.length}/${list.length} fetched`;
+          } catch (e) {
+            update({ overview: String(e) });
+          }
+        };
+      });
+
+      await pool(tasks, 4);
       applyFilters();
     } catch (e) {
       document.getElementById('status').textContent = 'Error: ' + e.message;
