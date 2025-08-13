@@ -1,12 +1,11 @@
-// Netlify function: tv search proxy with accuracy checks
+// Netlify function: TV search proxy with robust matching (TV ONLY)
 // File path: netlify/functions/tmdb.js
 
-// No need for node-fetch — Netlify’s Node 18 runtime has fetch built‑in
 const TMDB_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = "https://api.themoviedb.org/3";
 
 function normTitle(s) {
-  return s
+  return (s || "")
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\.\'\u2019]/g, "")
@@ -16,70 +15,121 @@ function normTitle(s) {
     .replace(/\s+/g, " ")
     .trim();
 }
+function normNoSpace(s) {
+  return normTitle(s).replace(/\s+/g, "");
+}
 
-function pickBest(inputTitle, inputYear, results = []) {
+const STOP = new Set(["the", "a", "an", "of", "and", "or", "with", "to"]);
+function tokens(s) {
+  return normTitle(s)
+    .split(" ")
+    .filter((t) => t && !STOP.has(t));
+}
+function jaccard(a, b) {
+  const A = new Set(a),
+    B = new Set(b);
+  const inter = [...A].filter((x) => B.has(x)).length;
+  const uni = new Set([...a, ...b]).size;
+  return uni ? inter / uni : 0;
+}
+function yearOf(r) {
+  const d = r.first_air_date || "";
+  return d ? Number(d.slice(0, 4)) : undefined;
+}
+
+function pickBest(inputTitle, inputYear, candidates) {
   const nInput = normTitle(inputTitle);
-  const yearStr = String(inputYear);
-  const withYear = (r) => (r.first_air_date || "").startsWith(yearStr);
+  const nsInput = normNoSpace(inputTitle);
+  const tInput = tokens(inputTitle);
 
-  let exactYear = results.filter(
-    (r) => normTitle(r.name) === nInput && withYear(r),
-  );
-  if (exactYear.length) return exactYear[0];
+  // 1) Exact normalized title (with and without spaces)
+  const exacts = candidates.filter((c) => {
+    const n = normTitle(c.name);
+    return n === nInput || normNoSpace(c.name) === nsInput;
+  });
+  if (exacts.length) {
+    return exacts.sort((a, b) => {
+      const ay = yearOf(a) || 0,
+        by = yearOf(b) || 0;
+      const da = Math.abs((ay || 0) - (inputYear || 0));
+      const db = Math.abs((by || 0) - (inputYear || 0));
+      return da - db || (b.popularity || 0) - (a.popularity || 0);
+    })[0];
+  }
 
-  let exactAny = results.filter((r) => normTitle(r.name) === nInput);
-  if (exactAny.length) return exactAny[0];
+  // 2) Score by token overlap + year closeness + popularity (require some overlap)
+  const scored = candidates
+    .map((c) => {
+      const jac = jaccard(tInput, tokens(c.name));
+      const y = yearOf(c);
+      const yDelta =
+        typeof inputYear === "number" && y ? Math.abs(y - inputYear) : 999;
+      const yearScore = y
+        ? yDelta === 0
+          ? 1
+          : yDelta === 1
+            ? 0.6
+            : yDelta === 2
+              ? 0.3
+              : 0
+        : 0.2;
+      const pop = (c.popularity || 0) / 100;
+      const score = jac * 3 + yearScore * 1 + pop * 0.5;
+      return { c, score };
+    })
+    .filter((o) => o.score > 0.3) // need reasonable similarity
+    .sort((a, b) => b.score - a.score);
 
-  let sameYear = results
-    .filter(withYear)
-    .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-  if (sameYear.length) return sameYear[0];
-
-  return results[0];
+  return scored.length ? scored[0].c : candidates[0];
 }
 
 export async function handler(event) {
   try {
-    if (!TMDB_KEY) {
+    if (!TMDB_KEY)
       return {
         statusCode: 500,
         body: JSON.stringify({ error: "Missing TMDB_API_KEY" }),
       };
-    }
 
     const q = (event.queryStringParameters?.q || "").trim();
     const year = Number(event.queryStringParameters?.year || 0) || undefined;
     if (!q)
       return { statusCode: 400, body: JSON.stringify({ error: "Missing q" }) };
 
-    const searchUrl = new URL(`${TMDB_BASE}/search/tv`);
-    searchUrl.searchParams.set("api_key", TMDB_KEY);
-    searchUrl.searchParams.set("query", q);
-    searchUrl.searchParams.set("include_adult", "false");
-    if (year) searchUrl.searchParams.set("first_air_date_year", String(year));
+    // Search TV only; do NOT hard filter by year to avoid excluding near-year matches
+    const params = new URLSearchParams({
+      api_key: TMDB_KEY,
+      query: q,
+      include_adult: "false",
+      language: "en-US",
+    });
+    const res = await fetch(`${TMDB_BASE}/search/tv?${params}`);
+    if (!res.ok) throw new Error(`TMDB search failed: ${res.status}`);
+    const sJson = await res.json();
 
-    const sRes = await fetch(searchUrl);
-    if (!sRes.ok) throw new Error(`TMDB search failed: ${sRes.status}`);
-    const sJson = await sRes.json();
-    const results = Array.isArray(sJson.results) ? sJson.results : [];
+    const candidates = (sJson.results || []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      first_air_date: r.first_air_date,
+      vote_average: r.vote_average,
+      popularity: r.popularity,
+      poster_path: r.poster_path,
+    }));
 
-    if (results.length === 0) {
+    if (!candidates.length) {
+      // No match found – return a minimal object so UI shows the card
       return {
         statusCode: 200,
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          inputTitle: q,
-          inputYear: year,
-          note: "No results",
-        }),
+        body: JSON.stringify({ note: "No results" }),
       };
     }
 
-    const best = pickBest(q, year, results);
+    const best = pickBest(q, year, candidates);
 
+    // Fetch full TV details
     const detailUrl = new URL(`${TMDB_BASE}/tv/${best.id}`);
     detailUrl.searchParams.set("api_key", TMDB_KEY);
-
     const dRes = await fetch(detailUrl);
     if (!dRes.ok) throw new Error(`TMDB details failed: ${dRes.status}`);
     const d = await dRes.json();
@@ -88,7 +138,7 @@ export async function handler(event) {
       id: d.id,
       name: d.name,
       overview: d.overview,
-      first_air_date: d.first_air_date,
+      date: d.first_air_date || null,
       vote_average: d.vote_average,
       status: d.status,
       networks: (d.networks || []).map((n) => n.name),
