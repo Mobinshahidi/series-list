@@ -1,8 +1,8 @@
-[functions]
-  directory = "netlify/functions"
+[build]
+  functions = "netlify/functions"
+  publish = "."
 
-# If your publish dir is the repo root, you’re done.
-# Otherwise set:
-# [build]
-#   publish = "dist"   # or wherever index.html + series.txt live
-
+[[redirects]]
+  from = "/.netlify/functions/tmdb"
+  to = "/.netlify/functions/tmdb"
+  status = 200
