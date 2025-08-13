@@ -1,0 +1,8 @@
+[functions]
+  directory = "netlify/functions"
+
+# If your publish dir is the repo root, you’re done.
+# Otherwise set:
+# [build]
+#   publish = "dist"   # or wherever index.html + series.txt live
+
