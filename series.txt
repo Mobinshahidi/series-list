@@ -1,86 +1,86 @@
-- smoke
-- Ballard
-- The Assassin
-- Mr inbetween
-- Severance
-- The Punisher
-- Berlin 
-- Daredevil born again
-- The day of jackal
-- Star Wars: Skeleton crew
-- Mobland
-- Special ops: lioness
-- Shrinking
-- The penguin 
-- Presumed innocent 
-- The flight attendant 
-- The Defenders
-- Mr. & Mrs. Smith 
-- Acolyte
-- Reacher
-- Echo marvel
-- What if...?
-- The Continental
-- Only murders in the building
-- Ahsoka
-- Silo
-- The Days netflix
-- Succession
-- Citadel
-- Night agent
-- Rabbit hole
-- Kaleidoscope 
-- Pantheon
-- Andor
-- Daredevil netflix
-- The bear
-- The Crew 2021 netflix 
-- The old man
-- Ms marvel
-- Obi wan kenobi
-- Under the banner of heaven
-- Moon knight
-- Clone wars 2009
-- The Office
-- Hawkey
-- Peacemaker 2022
-- The book of bobba fett
-- Ben 10: Ultimate Alien
-- Atlanta
-- Fleabag
-- How i met your mother
-- Fairly odd parents
-- Brooklyn nine-nine
-- The fugitive
-- Designated survivor
-- Ted lasso
-- Loki
-- The wire
-- Narcos
-- Rick and morty
-- Utopia 2020
-- WandaVision
-- Falcon and winter soldier
-- Big bang theory
-- Patrik melrose
-- 11.22.63
-- True Detective
-- Black mirror
-- Hannibal
-- See
-- Dark 2017
-- Money heist
-- Chernobyl
-- The 100
-- Most dangerous game
-- 24 2001-2010
-- Stranger Things
-- Emily in paris
-- Project Blue Book
-- Avatar: the last airbender animation
-- The legend of korra
-- Silicon valley 
-- Prison break
-- Mandalorian
-- Mr. Robot
-- Sherlock
+Smoke — 2025
+Ballard — 2025
+The Assassin — 2025
+Mr Inbetween — 2018
+Severance — 2022
+The Punisher — 2017
+Berlin — 2023
+Daredevil: Born Again — 2025
+The Day of the Jackal — 2025
+Star Wars: Skeleton Crew — 2025
+Mobland — 2023
+Special Ops: Lioness — 2023
+Shrinking — 2023
+The Penguin — 2025
+Presumed Innocent — 2025
+The Flight Attendant — 2020
+The Defenders — 2017
+Mr. & Mrs. Smith — 2024
+The Acolyte — 2024
+Reacher — 2022
+Echo — 2024
+What If...? — 2021
+The Continental — 2023
+Only Murders in the Building — 2021
+Ahsoka — 2023
+Silo — 2023
+The Days — 2023
+Succession — 2018
+Citadel — 2023
+The Night Agent — 2023
+Rabbit Hole — 2023
+Kaleidoscope — 2023
+Pantheon — 2022
+Andor — 2022
+Daredevil — 2015
+The Bear — 2022
+The Crew — 2021
+The Old Man — 2022
+Ms. Marvel — 2022
+Obi-Wan Kenobi — 2022
+Under the Banner of Heaven — 2022
+Moon Knight — 2022
+Star Wars: The Clone Wars — 2008
+The Office — 2005
+Hawkeye — 2021
+Peacemaker — 2022
+The Book of Boba Fett — 2021
+Ben 10: Ultimate Alien — 2010
+Atlanta — 2016
+Fleabag — 2016
+How I Met Your Mother — 2005
+The Fairly OddParents — 2001
+Brooklyn Nine-Nine — 2013
+The Fugitive — 2020
+Designated Survivor — 2016
+Ted Lasso — 2020
+Loki — 2021
+The Wire — 2002
+Narcos — 2015
+Rick and Morty — 2013
+Utopia — 2020
+WandaVision — 2021
+The Falcon and the Winter Soldier — 2021
+The Big Bang Theory — 2007
+Patrick Melrose — 2018
+11.22.63 — 2016
+True Detective — 2014
+Black Mirror — 2011
+Hannibal — 2013
+See — 2019
+Dark — 2017
+Money Heist — 2017
+Chernobyl — 2019
+The 100 — 2014
+Most Dangerous Game — 2020
+24 — 2001
+Stranger Things — 2016
+Emily in Paris — 2020
+Project Blue Book — 2019
+Avatar: The Last Airbender — 2005
+The Legend of Korra — 2012
+Silicon Valley — 2014
+Prison Break — 2005
+The Mandalorian — 2019
+Mr. Robot — 2015
+Sherlock — 2010
